@@ -32,7 +32,12 @@ use rayon::prelude::*;
 /// let output_lwe_dimension = LweDimension(2048);
 /// let decomp_base_log = DecompositionBaseLog(3);
 /// let decomp_level_count = DecompositionLevelCount(5);
-/// let ciphertext_modulus = CiphertextModulus::new_native();
+/// let output_modulus_log2 = 62;
+/// let ciphertext_modulus_ksk = CiphertextModulus::try_new_power_of_2(output_modulus_log2).unwrap();
+/// let input_modulus_log2 = 64;
+/// let ciphertext_modulus = CiphertextModulus::try_new_power_of_2(input_modulus_log2).unwrap();
+/// let cleartext_log2 = 4;
+///
 ///
 /// // Create the PRNG
 /// let mut seeder = new_seeder();
@@ -56,13 +61,13 @@ use rayon::prelude::*;
 ///     decomp_base_log,
 ///     decomp_level_count,
 ///     lwe_modular_std_dev,
-///     ciphertext_modulus,
+///     ciphertext_modulus_ksk,
 ///     &mut encryption_generator,
 /// );
 ///
 /// // Create the plaintext
 /// let msg = 3u64;
-/// let plaintext = Plaintext(msg << 60);
+/// let plaintext = Plaintext(msg << (input_modulus_log2 - cleartext_log2));
 ///
 /// // Create a new LweCiphertext
 /// let input_lwe = allocate_and_encrypt_new_lwe_ciphertext(
@@ -76,7 +81,7 @@ use rayon::prelude::*;
 /// let mut output_lwe = LweCiphertext::new(
 ///     0,
 ///     output_lwe_secret_key.lwe_dimension().to_lwe_size(),
-///     ciphertext_modulus,
+///     ciphertext_modulus_ksk,
 /// );
 ///
 /// keyswitch_lwe_ciphertext(&ksk, &input_lwe, &mut output_lwe);
@@ -85,15 +90,16 @@ use rayon::prelude::*;
 ///
 /// // Round and remove encoding
 /// // First create a decomposer working on the high 4 bits corresponding to our encoding.
-/// let decomposer = SignedDecomposer::new(DecompositionBaseLog(4), DecompositionLevelCount(1));
+/// let decomposer_base_log = 64 + cleartext_log2 - output_modulus_log2;
+/// let decomposer = SignedDecomposer::new(DecompositionBaseLog(decomposer_base_log), DecompositionLevelCount(1));
 ///
 /// let rounded = decomposer.closest_representable(decrypted_plaintext.0);
 ///
 /// // Remove the encoding
-/// let cleartext = rounded >> 60;
+/// let cleartext = rounded >> (output_modulus_log2 - cleartext_log2);
 ///
 /// // Check we recovered the original message
-/// assert_eq!(cleartext, msg);
+/// assert_eq!(cleartext % (1 << cleartext_log2), msg);
 /// ```
 pub fn keyswitch_lwe_ciphertext<Scalar, KSKCont, InputCont, OutputCont>(
     lwe_keyswitch_key: &LweKeyswitchKey<KSKCont>,
@@ -151,14 +157,6 @@ pub fn keyswitch_lwe_ciphertext_native_mod_compatible<Scalar, KSKCont, InputCont
     );
     assert_eq!(
         lwe_keyswitch_key.ciphertext_modulus(),
-        input_lwe_ciphertext.ciphertext_modulus(),
-        "Mismatched CiphertextModulus. \
-        LweKeyswitchKey CiphertextModulus: {:?}, input LweCiphertext CiphertextModulus {:?}.",
-        lwe_keyswitch_key.ciphertext_modulus(),
-        input_lwe_ciphertext.ciphertext_modulus(),
-    );
-    assert_eq!(
-        lwe_keyswitch_key.ciphertext_modulus(),
         output_lwe_ciphertext.ciphertext_modulus(),
         "Mismatched CiphertextModulus. \
         LweKeyswitchKey CiphertextModulus: {:?}, output LweCiphertext CiphertextModulus {:?}.",
@@ -166,6 +164,9 @@ pub fn keyswitch_lwe_ciphertext_native_mod_compatible<Scalar, KSKCont, InputCont
         output_lwe_ciphertext.ciphertext_modulus(),
     );
     assert!(lwe_keyswitch_key
+        .ciphertext_modulus()
+        .is_compatible_with_native_modulus());
+    assert!(input_lwe_ciphertext
         .ciphertext_modulus()
         .is_compatible_with_native_modulus());
 
