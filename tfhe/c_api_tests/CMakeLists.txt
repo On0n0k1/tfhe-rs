@@ -11,7 +11,7 @@ include_directories(${TFHE_C_API_RELEASE})
 # This one is to fetch the dynamic buffer header
 include_directories(${TFHE_C_API_RELEASE}/deps)
 add_library(Tfhe STATIC IMPORTED)
-set_target_properties(Tfhe PROPERTIES IMPORTED_LOCATION ${TFHE_C_API_RELEASE}/libtfhe.a)
+set_target_properties(Tfhe PROPERTIES IMPORTED_LOCATION ${TFHE_C_API_RELEASE}/libtfhe_0_5.a)
 add_library(TfheDynamicBuffer STATIC IMPORTED)
 set_target_properties(TfheDynamicBuffer PROPERTIES IMPORTED_LOCATION ${TFHE_C_API_RELEASE}/deps/libtfhe_c_api_dynamic_buffer.a)
 

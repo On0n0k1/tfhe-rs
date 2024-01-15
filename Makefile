@@ -289,6 +289,7 @@ build_c_api: install_rs_check_toolchain
 		--features=$(TARGET_ARCH_FEATURE),boolean-c-api,shortint-c-api,high-level-c-api \
 		-p $(TFHE_SPEC)
 	@"$(MAKE)" symlink_c_libs_without_fingerprint
+	@ln -snf ./tfhe_0_5.h target/$(CARGO_PROFILE)/tfhe.h
 
 .PHONY: build_c_api_experimental_deterministic_fft # Build the C API for boolean, shortint and integer with experimental deterministic FFT
 build_c_api_experimental_deterministic_fft: install_rs_check_toolchain
