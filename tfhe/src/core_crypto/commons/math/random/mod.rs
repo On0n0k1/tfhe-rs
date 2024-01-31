@@ -26,6 +26,7 @@ pub use uniform_msb::*;
 pub use uniform_ternary::*;
 pub use uniform_with_zeros::*;
 
+#[cfg(not(feature = "__coverage"))]
 #[cfg(test)]
 mod tests;
 

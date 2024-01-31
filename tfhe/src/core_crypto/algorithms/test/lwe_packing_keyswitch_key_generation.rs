@@ -16,9 +16,17 @@ fn test_seeded_lwe_pksk_gen_equivalence<Scalar: UnsignedTorus>(
     // DISCLAIMER: these toy example parameters are not guaranteed to be secure or yield correct
     // computations
     // Define parameters for LweKeyswitchKey creation
+    #[cfg(not(feature = "__coverage"))]
     let input_lwe_dimension = LweDimension(742);
-    let output_glwe_dimension = GlweDimension(1);
+    #[cfg(feature = "__coverage")]
+    let input_lwe_dimension = LweDimension(1);
+
+    #[cfg(not(feature = "__coverage"))]
     let output_polynomial_size = PolynomialSize(2048);
+    #[cfg(feature = "__coverage")]
+    let output_polynomial_size = PolynomialSize(32);
+
+    let output_glwe_dimension = GlweDimension(1);
     let glwe_modular_std_dev = StandardDev(0.00000000000000029403601535432533);
     let decomp_base_log = DecompositionBaseLog(3);
     let decomp_level_count = DecompositionLevelCount(5);

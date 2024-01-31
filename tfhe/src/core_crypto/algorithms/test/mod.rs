@@ -24,6 +24,7 @@ mod lwe_packing_keyswitch;
 mod lwe_packing_keyswitch_key_generation;
 mod lwe_private_functional_packing_keyswitch;
 pub(crate) mod lwe_programmable_bootstrapping;
+#[cfg(not(feature = "__coverage"))]
 mod noise_distribution;
 
 pub struct TestResources {
@@ -72,10 +73,50 @@ pub const TEST_PARAMS_4_BITS_NATIVE_U64: ClassicTestParams<u64> = ClassicTestPar
     ciphertext_modulus: CiphertextModulus::new_native(),
 };
 
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_TEST_PARAMS_4_BITS_NATIVE_U64: ClassicTestParams<u64> = ClassicTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
+    lwe_modular_std_dev: StandardDev(0.000007069849454709433),
+    glwe_modular_std_dev: StandardDev(0.00000000000000029403601535432533),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ks_level: DecompositionLevelCount(5),
+    ks_base_log: DecompositionBaseLog(3),
+    pfks_level: DecompositionLevelCount(1),
+    pfks_base_log: DecompositionBaseLog(23),
+    pfks_modular_std_dev: StandardDev(0.00000000000000029403601535432533),
+    cbs_level: DecompositionLevelCount(0),
+    cbs_base_log: DecompositionBaseLog(0),
+    message_modulus_log: CiphertextModulusLog(4),
+    ciphertext_modulus: CiphertextModulus::new_native(),
+};
+
 pub const TEST_PARAMS_3_BITS_63_U64: ClassicTestParams<u64> = ClassicTestParams {
     lwe_dimension: LweDimension(742),
     glwe_dimension: GlweDimension(1),
     polynomial_size: PolynomialSize(2048),
+    lwe_modular_std_dev: StandardDev(0.000007069849454709433),
+    glwe_modular_std_dev: StandardDev(0.00000000000000029403601535432533),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ks_level: DecompositionLevelCount(5),
+    ks_base_log: DecompositionBaseLog(3),
+    pfks_level: DecompositionLevelCount(1),
+    pfks_base_log: DecompositionBaseLog(23),
+    pfks_modular_std_dev: StandardDev(0.00000000000000029403601535432533),
+    cbs_level: DecompositionLevelCount(0),
+    cbs_base_log: DecompositionBaseLog(0),
+    message_modulus_log: CiphertextModulusLog(3),
+    ciphertext_modulus: CiphertextModulus::new(1 << 63),
+};
+
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_TEST_PARAMS_3_BITS_63_U64: ClassicTestParams<u64> = ClassicTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
     lwe_modular_std_dev: StandardDev(0.000007069849454709433),
     glwe_modular_std_dev: StandardDev(0.00000000000000029403601535432533),
     pbs_base_log: DecompositionBaseLog(23),
@@ -251,6 +292,56 @@ pub const FFT128_U128_PARAMS: FftTestParams<u128> = FftTestParams {
     ciphertext_modulus: CiphertextModulus::<u128>::new_native(),
 };
 
+// DISCLAIMER: example parameters tailored for coverage tests. There are not guaranteed
+// to be secure or yield correct computations.
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_FFT_U32_PARAMS: FftTestParams<u32> = FftTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
+    lwe_modular_std_dev: StandardDev(0.00000000004998277131225527),
+    glwe_modular_std_dev: StandardDev(0.00000000000000000000000000000008645717832544903),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ciphertext_modulus: CiphertextModulus::new_native(),
+};
+
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_FFT_U64_PARAMS: FftTestParams<u64> = FftTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
+    lwe_modular_std_dev: StandardDev(0.00000000004998277131225527),
+    glwe_modular_std_dev: StandardDev(0.00000000000000000000000000000008645717832544903),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ciphertext_modulus: CiphertextModulus::new_native(),
+};
+
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_FFT_U128_PARAMS: FftTestParams<u128> = FftTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
+    lwe_modular_std_dev: StandardDev(0.00000000004998277131225527),
+    glwe_modular_std_dev: StandardDev(0.00000000000000000000000000000008645717832544903),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ciphertext_modulus: CiphertextModulus::new_native(),
+};
+
+#[cfg(feature = "__coverage")]
+pub const COVERAGE_FFT128_U128_PARAMS: FftTestParams<u128> = FftTestParams {
+    lwe_dimension: LweDimension(1),
+    glwe_dimension: GlweDimension(1),
+    polynomial_size: PolynomialSize(32),
+    lwe_modular_std_dev: StandardDev(0.12345),
+    glwe_modular_std_dev: StandardDev(0.00000000000000000000000000000008645717832544903),
+    pbs_base_log: DecompositionBaseLog(23),
+    pbs_level: DecompositionLevelCount(1),
+    ciphertext_modulus: CiphertextModulus::<u128>::new_native(),
+};
+
 pub const FFT_WOPBS_PARAMS: FftWopPbsTestParams<u64> = FftWopPbsTestParams {
     lwe_dimension: LweDimension(481),
     glwe_dimension: GlweDimension(1),
@@ -404,21 +495,33 @@ pub(crate) fn gen_keys_or_get_from_cache_if_enabled<
 
 // Macro to generate tests for all parameter sets
 macro_rules! create_parametrized_test{
-    ($name:ident { $($param:ident),*  $(,)? }) => {
+    (
+        $name:ident {
+            $($(#[$cfg:meta])* $param:ident),*
+            $(,)?
+        }
+    ) => {
         paste! {
             $(
-            #[test]
-            fn [<test_ $name _ $param:lower>]() {
-                $name($param)
-            }
+                #[test]
+                $(#[$cfg])*
+                fn [<test_ $name _ $param:lower>]() {
+                    $name($param)
+                }
             )*
         }
     };
      ($name:ident)=> {
         create_parametrized_test!($name
         {
+            #[cfg(not(feature = "__coverage"))]
             TEST_PARAMS_4_BITS_NATIVE_U64,
-            TEST_PARAMS_3_BITS_63_U64
+            #[cfg(not(feature = "__coverage"))]
+            TEST_PARAMS_3_BITS_63_U64,
+            #[cfg(feature = "__coverage")]
+            COVERAGE_TEST_PARAMS_4_BITS_NATIVE_U64,
+            #[cfg(feature = "__coverage")]
+            COVERAGE_TEST_PARAMS_3_BITS_63_U64
         });
     };
 }

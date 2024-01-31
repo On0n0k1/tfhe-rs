@@ -16,9 +16,17 @@ fn test_seeded_lwe_ksk_gen_equivalence<Scalar: UnsignedTorus + Send + Sync>(
     // DISCLAIMER: these toy example parameters are not guaranteed to be secure or yield correct
     // computations
     // Define parameters for LweKeyswitchKey creation
+    #[cfg(not(feature = "__coverage"))]
     let input_lwe_dimension = LweDimension(742);
-    let lwe_modular_std_dev = StandardDev(0.000007069849454709433);
+    #[cfg(feature = "__coverage")]
+    let input_lwe_dimension = LweDimension(1);
+
+    #[cfg(not(feature = "__coverage"))]
     let output_lwe_dimension = LweDimension(2048);
+    #[cfg(feature = "__coverage")]
+    let output_lwe_dimension = LweDimension(32);
+
+    let lwe_modular_std_dev = StandardDev(0.000007069849454709433);
     let decomp_base_log = DecompositionBaseLog(3);
     let decomp_level_count = DecompositionLevelCount(5);
 

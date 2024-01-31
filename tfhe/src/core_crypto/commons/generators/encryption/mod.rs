@@ -2,6 +2,7 @@
 
 pub(crate) mod mask_random_generator;
 pub(crate) mod noise_random_generator;
+#[cfg(not(feature = "__coverage"))]
 #[cfg(test)]
 mod test;
 use crate::core_crypto::commons::dispersion::DispersionParameter;

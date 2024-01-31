@@ -345,7 +345,7 @@ test_core_crypto_cov: install_rs_build_toolchain install_rs_check_toolchain inst
 			--out xml --output-dir coverage/core_crypto_avx512 --line --engine llvm --timeout 500 \
 			--implicit-test-threads $(COVERAGE_EXCLUDED_FILES) \
 			--features=$(TARGET_ARCH_FEATURE),experimental,internal-keycache,__coverage,$(AVX512_FEATURE) \
-			-p $(TFHE_SPEC) -- core_crypto::; \
+			-p $(TFHE_SPEC) -- -Z unstable-options --report-time core_crypto::; \
 	fi
 
 .PHONY: test_gpu # Run the tests of the core_crypto module including experimental on the gpu backend
