@@ -46,7 +46,9 @@ impl CompactFheBool {
         let ct: crate::integer::RadixCiphertext = self.list.expand_one();
         assert_eq!(ct.blocks.len(), 1);
         let block = BooleanBlock::new_unchecked(ct.blocks.into_iter().next().unwrap());
-        FheBool::new(block)
+        let mut ciphertext = FheBool::new(block);
+        ciphertext.ciphertext.move_to_device_of_server_key_if_set();
+        ciphertext
     }
 }
 
@@ -128,7 +130,9 @@ impl CompactFheBoolList {
             .map(|ct: crate::integer::RadixCiphertext| {
                 assert_eq!(ct.blocks.len(), 1);
                 let block = BooleanBlock::new_unchecked(ct.blocks.into_iter().next().unwrap());
-                FheBool::new(block)
+                let mut ciphertext = FheBool::new(block);
+                ciphertext.ciphertext.move_to_device_of_server_key_if_set();
+                ciphertext
             })
             .collect::<Vec<_>>()
     }

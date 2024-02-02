@@ -110,3 +110,7 @@ jobs:
       - name: Run user docs tests
         run: |
           make test_user_doc_gpu
+
+      - name: Run High Level API Tests
+        run: |
+          make test_high_level_api_gpu
