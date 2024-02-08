@@ -9,7 +9,7 @@ use crate::core_crypto::gpu::vec::CudaVec;
 use crate::core_crypto::prelude::{
     CiphertextModulus, DecompositionBaseLog, DecompositionLevelCount, GlweCiphertextCount,
     GlweDimension, LweBskGroupingFactor, LweCiphertextCount, LweCiphertextIndex, LweDimension,
-    Numeric, PolynomialSize, UnsignedInteger,
+    PolynomialSize, UnsignedInteger,
 };
 use std::ffi::c_void;
 use tfhe_cuda_backend::cuda_bind::*;
@@ -59,178 +59,6 @@ impl CudaStream {
         unsafe { cuda_synchronize_stream(self.as_c_ptr()) };
     }
 
-    /// Allocates `elements` on the GPU asynchronously
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize]  __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn malloc_async<T>(&self, elements: u32) -> CudaVec<T>
-    where
-        T: Numeric,
-    {
-        let size = elements as u64 * std::mem::size_of::<T>() as u64;
-        let ptr = CudaPtr {
-            ptr: cuda_malloc_async(size, self.as_c_ptr()),
-            device: self.device(),
-        };
-
-        CudaVec::new(ptr, elements as usize, self.device())
-    }
-
-    /// Sets data on the GPU to a specific `value`
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn memset_async<T>(&self, dest: &mut CudaVec<T>, value: T)
-    where
-        T: Numeric + Into<u64>,
-    {
-        let dest_size = dest.len() * std::mem::size_of::<T>();
-        // We have to check that dest is not empty, because cuda_memset with size 0 is invalid
-        if dest_size > 0 {
-            cuda_memset_async(
-                dest.as_mut_c_ptr(),
-                value.into(),
-                dest_size as u64,
-                self.as_c_ptr(),
-            );
-        }
-    }
-
-    /// Copies data from slice into GPU pointer
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn copy_to_gpu_async<T>(&self, dest: &mut CudaVec<T>, src: &[T])
-    where
-        T: Numeric,
-    {
-        let src_size = std::mem::size_of_val(src);
-        assert!(dest.len() * std::mem::size_of::<T>() >= src_size);
-
-        // We have to check that src is not empty, because Rust slice with size 0 results in an
-        // invalid pointer being passed to copy_to_gpu_async
-        if src_size > 0 {
-            cuda_memcpy_async_to_gpu(
-                dest.as_mut_c_ptr(),
-                src.as_ptr().cast(),
-                src_size as u64,
-                self.as_c_ptr(),
-            );
-        }
-    }
-
-    /// Copies data between different arrays in the GPU
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn copy_gpu_to_gpu_async<T>(&self, dest: &mut CudaVec<T>, src: &CudaVec<T>)
-    where
-        T: Numeric,
-    {
-        assert!(dest.len() >= src.len());
-        let size = src.len() * std::mem::size_of::<T>();
-        // We check that src is not empty to avoid invalid pointers
-        if size > 0 {
-            cuda_memcpy_async_gpu_to_gpu(
-                dest.as_mut_c_ptr(),
-                src.as_c_ptr(),
-                size as u64,
-                self.as_c_ptr(),
-            );
-        }
-    }
-
-    /// Copies data between two CudaVec, selecting a range of `src` as target
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn copy_src_range_gpu_to_gpu_async<R, T>(
-        &self,
-        range: R,
-        dest: &mut CudaVec<T>,
-        src: &CudaVec<T>,
-    ) where
-        R: std::ops::RangeBounds<usize>,
-        T: Numeric,
-    {
-        let (start, end) = src.range_bounds_to_start_end(range);
-        // size is > 0 thanks to this check
-        if end < start {
-            return;
-        }
-        assert!(end <= src.len());
-        assert!(end - start < src.len());
-        assert!(end - start < dest.len());
-
-        let src_ptr = src.as_c_ptr().add(start * std::mem::size_of::<T>());
-        let size = (end - start + 1) * std::mem::size_of::<T>();
-        cuda_memcpy_async_gpu_to_gpu(dest.as_mut_c_ptr(), src_ptr, size as u64, self.as_c_ptr());
-    }
-
-    /// Copies data between two CudaVec, selecting a range of `dest` as target
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called after the copy
-    /// as soon as synchronization is required
-    pub unsafe fn copy_dest_range_gpu_to_gpu_async<R, T>(
-        &self,
-        range: R,
-        dest: &mut CudaVec<T>,
-        src: &CudaVec<T>,
-    ) where
-        R: std::ops::RangeBounds<usize>,
-        T: Numeric,
-    {
-        let (start, end) = dest.range_bounds_to_start_end(range);
-        // size is > 0 thanks to this check
-        if end < start {
-            return;
-        }
-        assert!(end <= dest.len());
-        assert!(end - start < src.len());
-        assert!(end - start < dest.len());
-
-        let dest_ptr = dest.as_mut_c_ptr().add(start * std::mem::size_of::<T>());
-        let size = (end - start + 1) * std::mem::size_of::<T>();
-        cuda_memcpy_async_gpu_to_gpu(dest_ptr, src.as_c_ptr(), size as u64, self.as_c_ptr());
-    }
-
-    /// Copies data from GPU pointer into slice
-    ///
-    /// # Safety
-    ///
-    /// - [CudaStream::synchronize] __must__ be called as soon as synchronization is
-    /// required
-    pub unsafe fn copy_to_cpu_async<T>(&self, dest: &mut [T], src: &CudaVec<T>)
-    where
-        T: Numeric,
-    {
-        let src_size = src.len() * std::mem::size_of::<T>();
-        assert!(std::mem::size_of_val(dest) >= src_size);
-
-        // We have to check that src is not empty, because Rust slice with size 0 results in an
-        // invalid pointer being passed to copy_to_cpu_async
-        if src_size > 0 {
-            cuda_memcpy_async_to_cpu(
-                dest.as_mut_ptr().cast(),
-                src.as_c_ptr(),
-                src_size as u64,
-                self.as_c_ptr(),
-            );
-        }
-    }
-
     /// Discarding bootstrap on a vector of LWE ciphertexts
     ///
     /// # Safety
@@ -255,6 +83,13 @@ impl CudaStream {
         num_samples: u32,
         lwe_idx: LweCiphertextIndex,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(test_vector.gpu_index(), self.device.gpu_index);
+        assert_eq!(test_vector_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_in_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(bootstrapping_key.gpu_index(), self.device.gpu_index);
+
         let mut pbs_buffer: *mut i8 = std::ptr::null_mut();
         scratch_cuda_bootstrap_low_latency_64(
             self.as_c_ptr(),
@@ -314,6 +149,14 @@ impl CudaStream {
         num_samples: u32,
         lwe_idx: LweCiphertextIndex,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(output_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(test_vector.gpu_index(), self.device.gpu_index);
+        assert_eq!(test_vector_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
+        assert_eq!(input_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(bootstrapping_key.gpu_index(), self.device.gpu_index);
+
         let mut pbs_buffer: *mut i8 = std::ptr::null_mut();
         scratch_cuda_multi_bit_pbs_64(
             self.as_c_ptr(),
@@ -373,6 +216,12 @@ impl CudaStream {
         l_gadget: DecompositionLevelCount,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_out_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_in_indexes.gpu_index(), self.device.gpu_index);
+        assert_eq!(keyswitch_key.gpu_index(), self.device.gpu_index);
+
         cuda_keyswitch_lwe_ciphertext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -400,7 +249,9 @@ impl CudaStream {
         dest: &mut CudaVec<T>,
         src: &[T],
     ) {
-        self.copy_to_gpu_async(dest, src);
+        assert_eq!(dest.gpu_index(), self.device.gpu_index);
+
+        dest.copy_to_gpu_async(src, self);
     }
 
     /// Convert bootstrap key
@@ -421,6 +272,7 @@ impl CudaStream {
     ) {
         let size = std::mem::size_of_val(src);
         assert_eq!(dest.len() * std::mem::size_of::<T>(), size);
+        assert_eq!(dest.gpu_index(), self.device.gpu_index);
 
         cuda_convert_lwe_bootstrap_key_64(
             dest.as_mut_c_ptr(),
@@ -452,6 +304,7 @@ impl CudaStream {
     ) {
         let size = std::mem::size_of_val(src);
         assert_eq!(dest.len() * std::mem::size_of::<T>(), size);
+        assert_eq!(dest.gpu_index(), self.device.gpu_index);
         cuda_convert_lwe_multi_bit_bootstrap_key_64(
             dest.as_mut_c_ptr(),
             src.as_ptr().cast(),
@@ -478,6 +331,9 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in_1.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in_2.gpu_index(), self.device.gpu_index);
         cuda_add_lwe_ciphertext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -501,6 +357,8 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
         cuda_add_lwe_ciphertext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -525,6 +383,9 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
+        assert_eq!(plaintext_in.gpu_index(), self.device.gpu_index);
         cuda_add_lwe_ciphertext_vector_plaintext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -548,6 +409,8 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(plaintext_in.gpu_index(), self.device.gpu_index);
         cuda_add_lwe_ciphertext_vector_plaintext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -571,6 +434,8 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
         cuda_negate_lwe_ciphertext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -592,6 +457,7 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
         cuda_negate_lwe_ciphertext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -616,6 +482,7 @@ impl CudaStream {
         message_modulus: u32,
         carry_modulus: u32,
     ) {
+        assert_eq!(lwe_array.gpu_index(), self.device.gpu_index);
         cuda_negate_integer_radix_ciphertext_64_inplace(
             self.as_c_ptr(),
             lwe_array.as_mut_c_ptr(),
@@ -639,6 +506,8 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array.gpu_index(), self.device.gpu_index);
+        assert_eq!(cleartext_array_in.gpu_index(), self.device.gpu_index);
         cuda_mult_lwe_ciphertext_vector_cleartext_vector_64(
             self.as_c_ptr(),
             lwe_array.as_mut_c_ptr(),
@@ -663,6 +532,9 @@ impl CudaStream {
         lwe_dimension: LweDimension,
         num_samples: u32,
     ) {
+        assert_eq!(lwe_array_out.gpu_index(), self.device.gpu_index);
+        assert_eq!(lwe_array_in.gpu_index(), self.device.gpu_index);
+        assert_eq!(cleartext_array_in.gpu_index(), self.device.gpu_index);
         cuda_mult_lwe_ciphertext_vector_cleartext_vector_64(
             self.as_c_ptr(),
             lwe_array_out.as_mut_c_ptr(),
@@ -782,10 +654,10 @@ mod tests {
         let device = CudaDevice::new(gpu_index);
         let stream = CudaStream::new_unchecked(device);
         unsafe {
-            let mut d_vec: CudaVec<u64> = stream.malloc_async::<u64>(vec.len() as u32);
-            stream.copy_to_gpu_async(&mut d_vec, &vec);
+            let mut d_vec: CudaVec<u64> = CudaVec::<u64>::new_async(vec.len(), &stream);
+            d_vec.copy_to_gpu_async(&vec, &stream);
             let mut empty = vec![0_u64; vec.len()];
-            stream.copy_to_cpu_async(&mut empty, &d_vec);
+            d_vec.copy_to_cpu_async(&mut empty, &stream);
             stream.synchronize();
             assert_eq!(vec, empty);
         }
