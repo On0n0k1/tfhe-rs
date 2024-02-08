@@ -1,5 +1,5 @@
 use crate::core_crypto::gpu::{CudaDevice, CudaStream};
-use crate::integer::gpu::ciphertext::CudaRadixCiphertext;
+use crate::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
 use crate::integer::gpu::{gen_keys_gpu, CudaServerKey};
 use crate::integer::{RadixCiphertext, RadixClientKey, ServerKey};
 use crate::shortint::parameters::*;

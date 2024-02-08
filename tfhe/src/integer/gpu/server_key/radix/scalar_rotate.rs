@@ -1,6 +1,6 @@
 use crate::core_crypto::gpu::CudaStream;
 use crate::core_crypto::prelude::CastFrom;
-use crate::integer::gpu::ciphertext::CudaRadixCiphertext;
+use crate::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
 use crate::integer::gpu::server_key::CudaBootstrappingKey;
 use crate::integer::gpu::CudaServerKey;
 

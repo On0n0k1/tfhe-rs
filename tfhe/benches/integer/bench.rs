@@ -1185,7 +1185,7 @@ mod cuda {
     use criterion::{criterion_group, Criterion};
     use rand::prelude::*;
     use tfhe::core_crypto::gpu::{CudaDevice, CudaStream};
-    use tfhe::integer::gpu::ciphertext::CudaRadixCiphertext;
+    use tfhe::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
     use tfhe::integer::gpu::server_key::CudaServerKey;
     use tfhe::integer::keycache::KEY_CACHE;
     use tfhe::integer::IntegerKeyKind;

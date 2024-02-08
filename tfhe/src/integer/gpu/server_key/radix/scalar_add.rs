@@ -1,6 +1,6 @@
 use crate::core_crypto::gpu::CudaStream;
 use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
-use crate::integer::gpu::ciphertext::CudaRadixCiphertext;
+use crate::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
 use crate::integer::gpu::server_key::CudaServerKey;
 use itertools::Itertools;
 
@@ -16,7 +16,7 @@ impl CudaServerKey {
     ///
     /// ```rust
     /// use tfhe::core_crypto::gpu::{CudaDevice, CudaStream};
-    /// use tfhe::integer::gpu::ciphertext::CudaRadixCiphertext;
+    /// use tfhe::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
     /// use tfhe::integer::gpu::gen_keys_radix_gpu;
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
     ///
@@ -124,7 +124,7 @@ impl CudaServerKey {
     ///
     /// ```rust
     /// use tfhe::core_crypto::gpu::{CudaDevice, CudaStream};
-    /// use tfhe::integer::gpu::ciphertext::CudaRadixCiphertext;
+    /// use tfhe::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
     /// use tfhe::integer::gpu::gen_keys_radix_gpu;
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
     ///

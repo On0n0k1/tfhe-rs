@@ -10,9 +10,7 @@ use crate::core_crypto::prelude::{
     LweCiphertextCount, LweCiphertextList, LweMultiBitBootstrapKeyOwned,
 };
 use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
-use crate::integer::gpu::ciphertext::{
-    CudaBlockInfo, CudaRadixCiphertext, CudaRadixCiphertextInfo,
-};
+use crate::integer::gpu::ciphertext::{CudaBaseRadixCiphertext, CudaBlockInfo, CudaRadixCiphertext, CudaRadixCiphertextInfo};
 use crate::integer::ClientKey;
 use crate::shortint::ciphertext::{Degree, MaxDegree, NoiseLevel};
 use crate::shortint::engine::ShortintEngine;
@@ -286,7 +284,7 @@ impl CudaServerKey {
     ///
     /// ```rust
     /// use tfhe::core_crypto::gpu::{CudaDevice, CudaStream};
-    /// use tfhe::integer::gpu::ciphertext::CudaRadixCiphertext;
+    /// use tfhe::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
     /// use tfhe::integer::gpu::gen_keys_radix_gpu;
     /// use tfhe::integer::{gen_keys_radix, RadixCiphertext};
     /// use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;

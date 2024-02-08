@@ -1,7 +1,7 @@
 use crate::core_crypto::gpu::vec::CudaVec;
 use crate::core_crypto::gpu::CudaStream;
 use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
-use crate::integer::gpu::ciphertext::CudaRadixCiphertext;
+use crate::integer::gpu::ciphertext::{CudaIntegerRadixCiphertext, CudaRadixCiphertext};
 use crate::integer::gpu::server_key::{CudaBootstrappingKey, CudaServerKey};
 use crate::integer::gpu::ComparisonType;
 use crate::integer::server_key::comparator::Comparator;
