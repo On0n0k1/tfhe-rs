@@ -1,6 +1,6 @@
 use crate::core_crypto::commons::math::random::{
-    Gaussian, RandomGenerable, Uniform, UniformBinary, UniformLsb, UniformMsb, UniformTernary,
-    UniformWithZeros,
+    Distribution, Gaussian, RandomGenerable, TUniform, Uniform, UniformBinary, UniformLsb,
+    UniformMsb, UniformTernary, UniformWithZeros,
 };
 use crate::core_crypto::commons::math::torus::{UnsignedInteger, UnsignedTorus};
 use crate::core_crypto::commons::numeric::{CastInto, FloatingPoint};
@@ -138,6 +138,34 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         self.0
             .try_fork(ChildrenCount(n_child), BytesPerChild(bytes_per_child))
             .map(|iter| iter.map(Self))
+    }
+
+    pub fn random_from_distribution<Scalar, D>(&mut self, distribution: D) -> Scalar
+    where
+        D: Distribution,
+        Scalar: RandomGenerable<D>,
+    {
+        Scalar::generate_one(self, distribution)
+    }
+
+    pub fn random_from_distribution_custom_mod<Scalar, D>(
+        &mut self,
+        distribution: D,
+        custom_modulus: CiphertextModulus<Scalar>,
+    ) -> Scalar
+    where
+        D: Distribution,
+        Scalar: UnsignedInteger + RandomGenerable<D, CustomModulus = Scalar>,
+    {
+        if custom_modulus.is_native_modulus() {
+            return self.random_from_distribution(distribution);
+        }
+
+        Scalar::generate_one_custom_modulus(
+            self,
+            distribution,
+            custom_modulus.get_custom_modulus().cast_into(),
+        )
     }
 
     /// Generate a random uniform unsigned integer.
@@ -383,6 +411,32 @@ impl<G: ByteRandomGenerator> RandomGenerator<G> {
         Scalar: RandomGenerable<UniformWithZeros>,
     {
         Scalar::generate_one(self, UniformWithZeros { prob_zero })
+    }
+
+    /// Generate a random unsigned integer from the $TUniform(1, -2^b, 2^b)$ distribution. Negative
+    /// values are represented as their 2's complement values and stored as is in the output
+    /// unsigned integer.
+    ///
+    /// $TUniform(1, -2^b, 2^b)$ is defined as follows: any value in the interval
+    /// $\left[−2^b, 2^b\right]$ is selected with probability $\frac{1}{2^{b+1}}$, with the two end
+    /// points $−2^b$ and $2^b$ being selected with probability $\frac{1}{2^{b+2}}$.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use concrete_csprng::generators::SoftwareRandomGenerator;
+    /// use concrete_csprng::seeders::Seed;
+    /// use tfhe::core_crypto::commons::math::random::RandomGenerator;
+    /// let mut generator = RandomGenerator::<SoftwareRandomGenerator>::new(Seed(0));
+    /// let random = generator.random_t_uniform::<u64>(62);
+    /// assert!(random as i64 >= -(1i64 << 62));
+    /// assert!(random as i64 <= 1i64 << 62);
+    /// ```
+    pub fn random_t_uniform<Scalar>(&mut self, bound_log2: u32) -> Scalar
+    where
+        Scalar: UnsignedInteger + RandomGenerable<TUniform<Scalar>>,
+    {
+        Scalar::generate_one(self, TUniform::new(bound_log2))
     }
 
     /// Generate two floating point values drawn from a gaussian distribution with input mean and

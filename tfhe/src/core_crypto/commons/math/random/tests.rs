@@ -1,7 +1,8 @@
 use crate::core_crypto::algorithms::misc::check_clear_content_respects_mod;
 use crate::core_crypto::commons::ciphertext_modulus::CiphertextModulus;
-use crate::core_crypto::commons::math::random::{RandomGenerable, Uniform};
-use crate::core_crypto::commons::math::torus::{CastInto, UnsignedInteger, UnsignedTorus};
+use crate::core_crypto::commons::math::random::{RandomGenerable, TUniform, Uniform};
+use crate::core_crypto::commons::math::torus::UnsignedTorus;
+use crate::core_crypto::commons::numeric::{CastFrom, CastInto, UnsignedInteger};
 use crate::core_crypto::commons::test_tools::*;
 
 fn test_normal_random_three_sigma<T: UnsignedTorus>() {
@@ -398,8 +399,96 @@ fn test_normal_random_add_assign_solinas_custom_mod_u64() {
     );
 }
 
+pub trait DistributionTestHelper<Scalar: UnsignedInteger + CastFrom<usize> + CastInto<usize>> {
+    type CreationParams;
+    type DistinctValueInfos;
+
+    fn new_with_custom_modulus(
+        value: Self::CreationParams,
+        ciphertext_modulus: CiphertextModulus<Scalar>,
+    ) -> Self;
+
+    fn distinct_values(&self, infos: Self::DistinctValueInfos) -> usize;
+
+    fn map_usize_to_value(&self, input: usize) -> Scalar;
+
+    fn map_value_to_usize(&self, input: Scalar) -> usize;
+
+    fn cumulative_distribution_function(
+        &self,
+        integer_value: Scalar,
+        distinct_values: usize,
+    ) -> f64;
+}
+
+impl<Scalar: UnsignedInteger + CastFrom<usize> + CastInto<usize>> DistributionTestHelper<Scalar>
+    for Uniform
+{
+    type CreationParams = ();
+    type DistinctValueInfos = CiphertextModulus<Scalar>;
+
+    fn new_with_custom_modulus(
+        _value: Self::CreationParams,
+        _ciphertext_modulus: CiphertextModulus<Scalar>,
+    ) -> Self {
+        Uniform
+    }
+
+    fn distinct_values(&self, ciphertext_modulus: Self::DistinctValueInfos) -> usize {
+        let distinct_values: usize = if ciphertext_modulus.is_native_modulus() {
+            assert!(
+                Scalar::BITS < usize::BITS as usize,
+                "Unable to run test for such a large modulus {ciphertext_modulus:?}, usize::MAX {}",
+                usize::MAX
+            );
+            1 << Scalar::BITS
+        } else {
+            ciphertext_modulus.get_custom_modulus().cast_into()
+        };
+
+        distinct_values
+    }
+
+    fn cumulative_distribution_function(
+        &self,
+        integer_value: Scalar,
+        distinct_values: usize,
+    ) -> f64 {
+        // This is only valid if the smallest integer value for uniform is 0 which is currently the
+        // case
+        let integer_f64: f64 = (integer_value + Scalar::ONE).cast_into();
+        let distinct_values_f64: f64 = distinct_values as f64;
+
+        integer_f64 / distinct_values_f64
+    }
+
+    fn map_usize_to_value(&self, input: usize) -> Scalar {
+        Scalar::cast_from(input)
+    }
+
+    fn map_value_to_usize(&self, input: Scalar) -> usize {
+        input.cast_into()
+    }
+}
+
+fn dkw_cdf_bands_width(number_of_samples: usize, confidence_interval: f64) -> f64 {
+    // https://en.wikipedia.org/wiki/Dvoretzky%E2%80%93Kiefer%E2%80%93Wolfowitz_inequality#Building_CDF_bands
+    // the true CDF is between the empirical CDF +/- this band width with probability 1 - alpha
+    // Said otherwise, the abs diff should be less than that value with high probability
+    fn dkw_cdf_bands_width_formula(sample_size: f64, alpha: f64) -> f64 {
+        f64::sqrt(f64::ln(2.0 / alpha) / (2.0 * sample_size))
+    }
+
+    // alpha = 1 - probability of being in the interval
+    dkw_cdf_bands_width_formula(number_of_samples as f64, 1.0 - confidence_interval)
+}
+
 fn test_uniform_random_custom_mod<
-    Scalar: UnsignedInteger + CastInto<usize> + RandomGenerable<Uniform, CustomModulus = Scalar>,
+    Scalar: UnsignedInteger
+        + CastInto<usize>
+        + CastFrom<usize>
+        + RandomGenerable<Uniform, CustomModulus = Scalar>
+        + std::hash::Hash,
 >(
     ciphertext_modulus: CiphertextModulus<Scalar>,
 ) {
@@ -409,16 +498,8 @@ fn test_uniform_random_custom_mod<
         usize::BITS
     );
 
-    let distinct_values: usize = if ciphertext_modulus.is_native_modulus() {
-        assert!(
-            Scalar::BITS < usize::BITS as usize,
-            "Unable to run test for such a large modulus {ciphertext_modulus:?}, usize::MAX {}",
-            usize::MAX
-        );
-        1 << Scalar::BITS
-    } else {
-        ciphertext_modulus.get_custom_modulus().cast_into()
-    };
+    let distribution = Uniform;
+    let distinct_values = distribution.distinct_values(ciphertext_modulus);
 
     // About 105 seconds on a dev laptop for the non native u64 case
     pub const RUNS: usize = 5000;
@@ -439,8 +520,10 @@ fn test_uniform_random_custom_mod<
         for _ in 0..NUMBER_OF_SAMPLES_PER_VALUE {
             for _ in 0..distinct_values {
                 let uniform_random_value = rng.random_uniform_custom_mod(ciphertext_modulus);
-                let bin_idx: usize = uniform_random_value.cast_into();
-                bins[bin_idx] += 1;
+                let uniform_random_value_idx =
+                    distribution.map_value_to_usize(uniform_random_value);
+
+                bins[uniform_random_value_idx] += 1;
             }
         }
 
@@ -450,14 +533,14 @@ fn test_uniform_random_custom_mod<
         cumulative_sums[0] = curr_sum;
 
         // Compute the cumulative sums
-        for (bin, cum_sum) in bins.iter().zip(cumulative_sums.iter_mut()).skip(1) {
-            curr_sum += bin;
+        for (bin_count, cum_sum) in bins.iter().zip(cumulative_sums.iter_mut()).skip(1) {
+            curr_sum += bin_count;
             *cum_sum = curr_sum;
         }
 
         // Inaccurate if modulus >~ 2^53 / number_of_samples_per_bin, but if that's the case your
         // memory most likely blew up before (or the universe died its heat death)
-        let number_of_samples: f64 = NUMBER_OF_SAMPLES_PER_VALUE as f64 * distinct_values as f64;
+        let number_of_samples = NUMBER_OF_SAMPLES_PER_VALUE * distinct_values;
 
         let sup_diff: f64 = cumulative_sums
             .iter()
@@ -465,10 +548,12 @@ fn test_uniform_random_custom_mod<
             .enumerate()
             .map(|(bin_idx, x)| {
                 // Compute the observed CDF
-                let empirical_cdf = x as f64 / number_of_samples;
+                let empirical_cdf = x as f64 / number_of_samples as f64;
+
+                let integer_value: Scalar = distribution.map_usize_to_value(bin_idx);
                 // CDF for the uniform distribution
                 let theoretical_cdf =
-                    ((bin_idx + 1) * NUMBER_OF_SAMPLES_PER_VALUE) as f64 / number_of_samples;
+                    distribution.cumulative_distribution_function(integer_value, distinct_values);
 
                 if theoretical_cdf == 1.0 {
                     assert_eq!(empirical_cdf, 1.0);
@@ -480,15 +565,8 @@ fn test_uniform_random_custom_mod<
             .max_by(f64::total_cmp)
             .unwrap();
 
-        // https://en.wikipedia.org/wiki/Dvoretzky%E2%80%93Kiefer%E2%80%93Wolfowitz_inequality#Building_CDF_bands
-        // the true CDF is between the empirical CDF +/- this band width with probability 1 - alpha
-        // Said otherwise, the abs diff should be less than that value with high probability
-        let dkw_cdf_bands_width =
-            |sample_size: f64, alpha: f64| f64::sqrt(f64::ln(2.0 / alpha) / (2.0 * sample_size));
-
-        // alpha = 1 - probability of being in the interval
         let upper_bound_for_cdf_abs_diff =
-            dkw_cdf_bands_width(number_of_samples, 1.0 - CONFIDENCE_INTERVAL);
+            dkw_cdf_bands_width(number_of_samples, CONFIDENCE_INTERVAL);
         let distribution_ok = sup_diff <= upper_bound_for_cdf_abs_diff;
 
         if !distribution_ok {
@@ -516,5 +594,148 @@ fn test_uniform_random_custom_mod_u64() {
     // quickly
     test_uniform_random_custom_mod::<u64>(
         CiphertextModulus::try_new((1 << 10) + (1 << 9)).unwrap(),
+    );
+}
+
+impl<Scalar: UnsignedInteger + CastFrom<usize> + CastInto<usize>> DistributionTestHelper<Scalar>
+    for TUniform<Scalar>
+{
+    type CreationParams = u32;
+    type DistinctValueInfos = ();
+
+    fn new_with_custom_modulus(
+        value: Self::CreationParams,
+        ciphertext_modulus: CiphertextModulus<Scalar>,
+    ) -> Self {
+        assert!(ciphertext_modulus.is_native_modulus());
+        Self::new(value)
+    }
+
+    fn distinct_values(&self, _infos: Self::DistinctValueInfos) -> usize {
+        self.distinct_value_count()
+    }
+
+    fn cumulative_distribution_function(
+        &self,
+        integer_value: Scalar,
+        _distinct_values: usize,
+    ) -> f64 {
+        let min_value_inclusive = self.min_value_inclusive();
+        let max_value_inclusive = self.max_value_inclusive();
+        let integer_value_signed: Scalar::Signed = integer_value.cast_into();
+        let value_index: usize =
+            Scalar::cast_from(integer_value_signed - min_value_inclusive).cast_into();
+        // CDF for the TUniform distribution
+        let theoretical_cdf = if integer_value_signed == max_value_inclusive {
+            1.0
+        } else {
+            2.0f64.powi(-(self.bound_log2() as i32 + 2))
+                + 2.0f64.powi(-(self.bound_log2() as i32 + 1)) * value_index as f64
+        };
+
+        theoretical_cdf
+    }
+
+    fn map_usize_to_value(&self, input: usize) -> Scalar {
+        let input_as_scalar = Scalar::cast_from(input);
+        let input_as_signed_scalar: Scalar::Signed = input_as_scalar.cast_into();
+        let min_value_inclusive = self.min_value_inclusive();
+        let value_as_signed = input_as_signed_scalar + min_value_inclusive;
+        Scalar::cast_from(value_as_signed)
+    }
+
+    fn map_value_to_usize(&self, input: Scalar) -> usize {
+        let input_as_signed_scalar: Scalar::Signed = input.cast_into();
+        let min_value_inclusive = self.min_value_inclusive();
+        let index_as_signed = input_as_signed_scalar - min_value_inclusive;
+        let index_as_scalar = Scalar::cast_from(index_as_signed);
+        index_as_scalar.cast_into()
+    }
+}
+
+#[test]
+fn test_t_uniform_random_u64() {
+    let bound_log2 = 11;
+
+    let t_uniform_distribution = TUniform::<u64>::new(bound_log2);
+    let distinct_values = t_uniform_distribution.distinct_values(());
+
+    // About 105 seconds on a dev laptop for the non native u64 case
+    pub const RUNS: usize = 5000;
+    // We hope to have exactly 1000 samples per value possible given the input ciphertext modulus
+    pub const NUMBER_OF_SAMPLES_PER_VALUE: usize = 1000;
+    pub const CONFIDENCE_INTERVAL: f64 = 0.95;
+    // Expected OK rate is 0.05, we have a small tolerance as randomness is hard
+    pub const EXPECTED_NOK_RATE_WITH_TOLERANCE: f64 = 0.065;
+
+    let mut runs_nok: usize = 0;
+
+    for _ in 0..RUNS {
+        let mut bins = vec![0u64; distinct_values];
+        let mut rng = new_random_generator();
+
+        // We could do a single loop, but in the case very large sampling ever becomes possible,
+        // this avoids overflowing the usize
+        for _ in 0..NUMBER_OF_SAMPLES_PER_VALUE {
+            for _ in 0..distinct_values {
+                let random_value: u64 = rng.random_t_uniform(bound_log2);
+                let random_value_idx = t_uniform_distribution.map_value_to_usize(random_value);
+                bins[random_value_idx] += 1;
+            }
+        }
+
+        let mut cumulative_sums = vec![0u64; distinct_values];
+
+        let mut curr_sum = bins[0];
+        cumulative_sums[0] = curr_sum;
+
+        // Compute the cumulative sums
+        for (bin_count, cum_sum) in bins.iter().zip(cumulative_sums.iter_mut()).skip(1) {
+            curr_sum += bin_count;
+            *cum_sum = curr_sum;
+        }
+
+        // Inaccurate if modulus >~ 2^53 / number_of_samples_per_bin, but if that's the case your
+        // memory most likely blew up before (or the universe died its heat death)
+        let number_of_samples = NUMBER_OF_SAMPLES_PER_VALUE * distinct_values;
+
+        let sup_diff: f64 = cumulative_sums
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(bin_idx, x)| {
+                // Compute the observed CDF
+                let empirical_cdf = x as f64 / number_of_samples as f64;
+                let integer_value = t_uniform_distribution.map_usize_to_value(bin_idx);
+
+                // CDF for the TUniform distribution
+                let theoretical_cdf = t_uniform_distribution
+                    .cumulative_distribution_function(integer_value, distinct_values);
+
+                if theoretical_cdf == 1.0 {
+                    assert_eq!(empirical_cdf, 1.0);
+                }
+
+                let diff = empirical_cdf - theoretical_cdf;
+                diff.abs()
+            })
+            .max_by(f64::total_cmp)
+            .unwrap();
+
+        let upper_bound_for_cdf_abs_diff =
+            dkw_cdf_bands_width(number_of_samples, CONFIDENCE_INTERVAL);
+        let distribution_ok = sup_diff <= upper_bound_for_cdf_abs_diff;
+
+        if !distribution_ok {
+            runs_nok += 1;
+        }
+    }
+
+    // 95% confidence interval means 5% of runs may end up out of that value, have a small tolerance
+    let nok_ratio = runs_nok as f64 / RUNS as f64;
+    println!("nok_ratio={nok_ratio}");
+    assert!(
+        nok_ratio <= EXPECTED_NOK_RATE_WITH_TOLERANCE,
+        "nok_ratio={nok_ratio}"
     );
 }
