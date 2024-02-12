@@ -11,6 +11,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/${INCLUDE_DIR}/linear_algebra.h
     ${CMAKE_SOURCE_DIR}/${INCLUDE_DIR}/shifts.h
     ${CMAKE_SOURCE_DIR}/${INCLUDE_DIR}/vertical_packing.h)
+
 file(GLOB_RECURSE SOURCES "*.cu")
 add_library(tfhe_cuda_backend STATIC ${SOURCES})
 set_target_properties(tfhe_cuda_backend PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)

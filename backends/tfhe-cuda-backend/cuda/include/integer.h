@@ -875,7 +875,7 @@ template <typename Torus> struct int_are_all_block_true_buffer {
   int_radix_params params;
 
   int_radix_lut<Torus> *is_max_value_lut;
-  int_radix_lut<Torus> *is_equal_to_num_blocks_lut;
+  std::vector<int_radix_lut<Torus> *> is_equal_to_num_blocks_lut;
 
   Torus *tmp_block_accumulated;
 
@@ -907,21 +907,34 @@ template <typename Torus> struct int_are_all_block_true_buffer {
 
       is_max_value_lut = new int_radix_lut<Torus>(
           stream, params, 1, num_radix_blocks, allocate_gpu_memory);
-      is_equal_to_num_blocks_lut = new int_radix_lut<Torus>(
-          stream, params, 1, num_radix_blocks, allocate_gpu_memory);
       generate_device_accumulator<Torus>(
           stream, is_max_value_lut->lut, params.glwe_dimension,
           params.polynomial_size, params.message_modulus, params.carry_modulus,
           is_max_value_lut_f);
+
+      for (int i = 0; i < max_value; i++) {
+        auto lut = new int_radix_lut<Torus>(
+            stream, params, max_value, num_radix_blocks, allocate_gpu_memory);
+
+        auto is_equal_to_num_blocks_lut_f = [max_value, i](Torus x) -> Torus {
+          return (x & max_value) == i;
+        };
+        generate_device_accumulator<Torus>(
+            stream, lut->get_lut(0), params.glwe_dimension,
+            params.polynomial_size, params.message_modulus,
+            params.carry_modulus, is_equal_to_num_blocks_lut_f);
+        is_equal_to_num_blocks_lut.push_back(lut);
+      }
     }
   }
 
   void release(cuda_stream_t *stream) {
     is_max_value_lut->release(stream);
     delete is_max_value_lut;
-    is_equal_to_num_blocks_lut->release(stream);
-    delete is_equal_to_num_blocks_lut;
-
+    for (auto &lut : is_equal_to_num_blocks_lut) {
+      lut->release(stream);
+    }
+    is_equal_to_num_blocks_lut.clear();
     cuda_drop_async(tmp_block_accumulated, stream);
   }
 };

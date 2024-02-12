@@ -16,33 +16,43 @@
 // lwe_dimension + 1 threads
 // todo: This kernel MUST be refactored to a binary reduction
 template <typename Torus>
-__global__ void device_accumulate_all_blocks(Torus *output, Torus *input_block,
-                                             uint32_t lwe_dimension,
-                                             uint32_t num_blocks) {
+__global__ void device_accumulate_all_blocks_in_chunks(Torus *output_array,
+                                                       Torus *input_array,
+                                                       uint32_t lwe_dimension,
+                                                       uint32_t num_blocks,
+                                                       uint32_t num_chunks) {
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
-  if (idx < lwe_dimension + 1) {
-    auto block = &input_block[idx];
+  if (idx < (lwe_dimension + 1)) {
+    for (int chunk_id = 0; chunk_id < num_chunks; chunk_id++) {
 
-    Torus sum = block[0];
-    for (int i = 1; i < num_blocks; i++) {
-      sum += block[i * (lwe_dimension + 1)];
+      auto input = &input_array[chunk_id * (lwe_dimension + 1)];
+      auto output = &output_array[chunk_id * (lwe_dimension + 1)];
+
+      auto block = &input[idx];
+      Torus sum = block[0];
+      for (int i = 1; i < num_blocks; i++) {
+        sum += block[i * (lwe_dimension + 1)];
+      }
+
+      output[idx] = sum;
     }
-
-    output[idx] = sum;
   }
 }
 
 template <typename Torus>
-__host__ void accumulate_all_blocks(cuda_stream_t *stream, Torus *output,
-                                    Torus *input, uint32_t lwe_dimension,
-                                    uint32_t num_radix_blocks) {
+__host__ void accumulate_all_blocks_in_chunks(cuda_stream_t *stream,
+                                              Torus *output, Torus *input,
+                                              uint32_t lwe_dimension,
+                                              uint32_t num_radix_blocks,
+                                              uint32_t num_chunks) {
 
   int num_blocks = 0, num_threads = 0;
   int num_entries = (lwe_dimension + 1);
   getNumBlocksAndThreads(num_entries, 512, num_blocks, num_threads);
   // Add all blocks and store in sum
-  device_accumulate_all_blocks<<<num_blocks, num_threads, 0, stream->stream>>>(
-      output, input, lwe_dimension, num_radix_blocks);
+  device_accumulate_all_blocks_in_chunks<<<num_blocks, num_threads, 0,
+                                           stream->stream>>>(
+      output, input, lwe_dimension, num_radix_blocks, num_chunks);
   check_cuda_error(cudaGetLastError());
 }
 
@@ -62,8 +72,6 @@ are_all_comparisons_block_true(cuda_stream_t *stream, Torus *lwe_array_out,
 
   auto params = mem_ptr->params;
   auto big_lwe_dimension = params.big_lwe_dimension;
-  auto glwe_dimension = params.glwe_dimension;
-  auto polynomial_size = params.polynomial_size;
   auto message_modulus = params.message_modulus;
   auto carry_modulus = params.carry_modulus;
 
@@ -77,7 +85,6 @@ are_all_comparisons_block_true(cuda_stream_t *stream, Torus *lwe_array_out,
       lwe_array_out, lwe_array_in,
       num_radix_blocks * (big_lwe_dimension + 1) * sizeof(Torus), stream);
 
-  int lut_num_blocks = 0;
   uint32_t remaining_blocks = num_radix_blocks;
   while (remaining_blocks > 1) {
     // Split in max_value chunks
@@ -88,15 +95,11 @@ are_all_comparisons_block_true(cuda_stream_t *stream, Torus *lwe_array_out,
     // as in the worst case we will be adding `max_value` ones
     auto input_blocks = lwe_array_out;
     auto accumulator = are_all_block_true_buffer->tmp_block_accumulated;
-    for (int i = 0; i < num_chunks; i++) {
-      accumulate_all_blocks(stream, accumulator, input_blocks,
-                            big_lwe_dimension, chunk_length);
 
-      accumulator += (big_lwe_dimension + 1);
-      remaining_blocks -= (chunk_length - 1);
-      input_blocks += (big_lwe_dimension + 1) * chunk_length;
-    }
-    accumulator = are_all_block_true_buffer->tmp_block_accumulated;
+    accumulate_all_blocks_in_chunks(stream, accumulator, input_blocks,
+                                    big_lwe_dimension, chunk_length,
+                                    num_chunks);
+    remaining_blocks -= num_chunks * (chunk_length - 1);
 
     // Selects a LUT
     int_radix_lut<Torus> *lut;
@@ -108,19 +111,7 @@ are_all_comparisons_block_true(cuda_stream_t *stream, Torus *lwe_array_out,
       lut = are_all_block_true_buffer->is_max_value_lut;
     } else {
       // is_equal_to_num_blocks LUT
-      lut = are_all_block_true_buffer->is_equal_to_num_blocks_lut;
-      if (chunk_length != lut_num_blocks) {
-        auto is_equal_to_num_blocks_lut_f = [max_value,
-                                             chunk_length](Torus x) -> Torus {
-          return (x & max_value) == chunk_length;
-        };
-        generate_device_accumulator<Torus>(
-            stream, lut->lut, glwe_dimension, polynomial_size, message_modulus,
-            carry_modulus, is_equal_to_num_blocks_lut_f);
-
-        // We don't have to generate this lut again
-        lut_num_blocks = chunk_length;
-      }
+      lut = are_all_block_true_buffer->is_equal_to_num_blocks_lut[chunk_length];
     }
 
     // Applies the LUT
@@ -164,16 +155,11 @@ __host__ void is_at_least_one_comparisons_block_true(
     // as in the worst case we will be adding `max_value` ones
     auto input_blocks = lwe_array_out;
     auto accumulator = buffer->tmp_block_accumulated;
-    for (int i = 0; i < num_chunks; i++) {
-      accumulate_all_blocks(stream, accumulator, input_blocks,
-                            big_lwe_dimension, chunk_length);
 
-      accumulator += (big_lwe_dimension + 1);
-      remaining_blocks -= (chunk_length - 1);
-      input_blocks += (big_lwe_dimension + 1) * chunk_length;
-    }
-    accumulator = buffer->tmp_block_accumulated;
-
+    accumulate_all_blocks_in_chunks(stream, accumulator, input_blocks,
+                                    big_lwe_dimension, chunk_length,
+                                    num_chunks);
+    remaining_blocks -= num_chunks * (chunk_length - 1);
     // Selects a LUT
     int_radix_lut<Torus> *lut = mem_ptr->eq_buffer->is_non_zero_lut;
 
@@ -242,11 +228,10 @@ __host__ void host_compare_with_zero_equality(
       uint32_t chunk_size =
           std::min(remainder_blocks, num_elements_to_fill_carry);
 
-      accumulate_all_blocks(stream, sum_i, chunk, big_lwe_dimension,
-                            chunk_size);
-
-      num_sum_blocks++;
+      accumulate_all_blocks_in_chunks(stream, sum_i, chunk, big_lwe_dimension,
+                                      chunk_size, 1);
       remainder_blocks -= (chunk_size - 1);
+      num_sum_blocks++;
 
       // Update operands
       chunk += chunk_size * big_lwe_size;

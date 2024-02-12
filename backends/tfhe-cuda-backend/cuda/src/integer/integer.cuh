@@ -11,6 +11,7 @@
 #include "polynomial/functions.cuh"
 #include "utils/kernel_dimensions.cuh"
 #include <functional>
+#include <omp.h>
 
 // function rotates right  radix ciphertext with specific value
 // grid is one dimensional
@@ -173,6 +174,7 @@ void generate_lookup_table(Torus *acc, uint32_t glwe_dimension,
   auto body = &acc[glwe_dimension * polynomial_size];
 
   // This accumulator extracts the carry bits
+#pragma omp parallel for
   for (int i = 0; i < modulus_sup; i++) {
     int index = i * box_size;
     for (int j = index; j < index + box_size; j++) {
@@ -184,7 +186,9 @@ void generate_lookup_table(Torus *acc, uint32_t glwe_dimension,
   int half_box_size = box_size / 2;
 
   // Negate the first half_box_size coefficients
-  for (int i = 0; i < half_box_size; i++) {
+  // Standard scalar implementation
+#pragma omp parallel for
+  for (int i = 0; i < half_box_size; ++i) {
     body[i] = -body[i];
   }
 
@@ -232,11 +236,9 @@ void generate_device_accumulator_bivariate(
                                          message_modulus, carry_modulus, f);
 
   // copy host lut and lut_indexes to device
-  cuda_memcpy_async_to_gpu(
-      acc_bivariate, h_lut,
-      (glwe_dimension + 1) * polynomial_size * sizeof(Torus), stream);
+  cuda_memcpy_to_gpu(acc_bivariate, h_lut,
+                     (glwe_dimension + 1) * polynomial_size * sizeof(Torus));
 
-  cuda_synchronize_stream(stream);
   free(h_lut);
 }
 
@@ -264,11 +266,9 @@ void generate_device_accumulator(cuda_stream_t *stream, Torus *acc,
                                message_modulus, carry_modulus, f);
 
   // copy host lut and lut_indexes to device
-  cuda_memcpy_async_to_gpu(
-      acc, h_lut, (glwe_dimension + 1) * polynomial_size * sizeof(Torus),
-      stream);
+  cuda_memcpy_to_gpu(acc, h_lut,
+                     (glwe_dimension + 1) * polynomial_size * sizeof(Torus));
 
-  cuda_synchronize_stream(stream);
   free(h_lut);
 }
 
