@@ -2,6 +2,8 @@ project(tfhe-c-api-tests)
 
 cmake_minimum_required(VERSION 3.16)
 
+include(CheckIncludeFile)
+
 if(NOT CARGO_PROFILE)
     set(CARGO_PROFILE release)
 endif()
@@ -33,6 +35,16 @@ file(GLOB TEST_CASES test_*.c)
 foreach (testsourcefile ${TEST_CASES})
     get_filename_component(testname ${testsourcefile} NAME_WLE)
     get_filename_component(groupname ${testsourcefile} DIRECTORY)
+
+    if(${testsourcefile} MATCHES  "test_high_level_threading.c$")
+        # This test requires the <threads.h> header which may not be supported
+        CHECK_INCLUDE_FILE("threads.h" SUPPORTS_C11_THREADS)
+        if (NOT SUPPORTS_C11_THREADS)
+            message(STATUS "skipping ${testsourcefile}: No <threads.h>")
+            continue()
+        endif()
+    endif()
+
     add_executable(${testname} ${testsourcefile})
     add_test(
             NAME ${testname}
@@ -47,6 +59,7 @@ foreach (testsourcefile ${TEST_CASES})
         target_compile_definitions(${testname} PUBLIC -DWITH_FEATURE_GPU)
     endif()
 
+    set_property(TARGET ${testname} PROPERTY C_STANDARD 11)
     if(APPLE)
         target_link_libraries(${testname} LINK_PUBLIC ${SECURITY_FRAMEWORK})
     endif()
