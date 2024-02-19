@@ -26,26 +26,30 @@ fn test_unchecked_function<UncheckedFn, ClearF>(
 
     let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
 
-    for _ in 0..num_test {
-        let clear_a = rng.gen::<U256>();
-        let clear_b = rng.gen::<U256>();
+    // Test with low number of blocks, as they take a different branches
+    // (regression tests)
+    for num_block in [num_block, 1, 2] {
+        for _ in 0..num_test {
+            let clear_a = rng.gen::<U256>();
+            let clear_b = rng.gen::<U256>();
 
-        let a = cks.encrypt_radix(clear_a, num_block);
-        let b = cks.encrypt_radix(clear_b, num_block);
+            let a = cks.encrypt_radix(clear_a, num_block);
+            let b = cks.encrypt_radix(clear_b, num_block);
 
-        {
-            let result = unchecked_comparison_method(&sks, &a, &b);
-            let decrypted: U256 = cks.decrypt_radix(&result);
-            let expected_result = clear_fn(clear_a, clear_b);
-            assert_eq!(decrypted, expected_result);
-        }
+            {
+                let result = unchecked_comparison_method(&sks, &a, &b);
+                let decrypted: U256 = cks.decrypt_radix(&result);
+                let expected_result = clear_fn(clear_a, clear_b);
+                assert_eq!(decrypted, expected_result);
+            }
 
-        {
-            // Force case where lhs == rhs
-            let result = unchecked_comparison_method(&sks, &a, &a);
-            let decrypted: U256 = cks.decrypt_radix(&result);
-            let expected_result = clear_fn(clear_a, clear_a);
-            assert_eq!(decrypted, expected_result);
+            {
+                // Force case where lhs == rhs
+                let result = unchecked_comparison_method(&sks, &a, &a);
+                let decrypted: U256 = cks.decrypt_radix(&result);
+                let expected_result = clear_fn(clear_a, clear_a);
+                assert_eq!(decrypted, expected_result);
+            }
         }
     }
 }

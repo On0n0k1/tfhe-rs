@@ -322,10 +322,14 @@ impl<'a> Comparator<'a> {
                 .apply_lookup_table_assign(&mut result, &final_lut);
             result
         } else {
-            let final_lut = self
-                .server_key
-                .key
-                .generate_lookup_table(sign_result_handler_fn);
+            let final_lut = self.server_key.key.generate_lookup_table(|x| {
+                // sign blocks have values in the set {0, 1, 2}
+                // here we force apply that modulus explicitely
+                // so that generate_lookup_table has the correct
+                // degree estimation
+                let final_sign = x % 3;
+                sign_result_handler_fn(final_sign)
+            });
             self.server_key
                 .key
                 .apply_lookup_table(&sign_blocks[0], &final_lut)
